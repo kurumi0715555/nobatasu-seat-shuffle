@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    
+    <link rel="stylesheet" href="common/css/common.css">
+    <link rel="stylesheet" href="common/css/modal.css">
+    <link rel="stylesheet" href="common/css/landscape-guard.css">
+    <link rel="stylesheet" href="css/seat-shuffle.css">
+    <link rel="stylesheet" href="common/vendor/fontawesome/css/fontawesome.css">
+<link rel="stylesheet" href="common/vendor/fontawesome/css/solid.css">
+    
+    
+    
+<title>席替えジェネレーター</title>
+<link rel="stylesheet" href="oss/standalone.css">
+<script defer src="oss/standalone.js"></script>
+</head>
+<body data-tablet-ok="true">
+    <button id="classModeToggle" class="class-mode-toggle">
+        <i id="classModeIcon" class="fas fa-chalkboard"></i>
+        <span id="classModeText">授業モード OFF</span>
+    </button>
+
+    <div class="site-wrapper">
+        <aside class="ad-left"></aside>
+
+        <div class="container">
+            <header class="ss-page-header">
+                <div>
+                    <h1><i class="fas fa-chair"></i> 席替えジェネレーター</h1>
+                    <p class="subtitle">座席表を整えて、条件つきで席替え</p>
+                </div>
+            </header>
+
+            <main>
+                <div class="seat-shuffle-app" id="seatShuffleApp">
+
+                    <!-- 進捗バー -->
+                    <nav class="ss-progress no-print" aria-label="ステップ">
+                        <ol class="ss-progress-list" id="ssProgressList">
+                            <li><button type="button" class="ss-progress-node" data-step="1" aria-current="step">
+                                <span class="ss-progress-circle">1</span>
+                                <span class="ss-progress-label">レイアウト</span>
+                            </button></li>
+                            <li><button type="button" class="ss-progress-node" data-step="2">
+                                <span class="ss-progress-circle">2</span>
+                                <span class="ss-progress-label">名簿</span>
+                            </button></li>
+                            <li><button type="button" class="ss-progress-node" data-step="3">
+                                <span class="ss-progress-circle">3</span>
+                                <span class="ss-progress-label">条件</span>
+                            </button></li>
+                            <li><button type="button" class="ss-progress-node" data-step="4">
+                                <span class="ss-progress-circle">4</span>
+                                <span class="ss-progress-label">結果</span>
+                            </button></li>
+                        </ol>
+                        <div class="ss-progress-track" aria-hidden="true">
+                            <div class="ss-progress-fill" id="ssProgressFill"></div>
+                        </div>
+                    </nav>
+
+                    <!-- ステップカード -->
+                    <div class="ss-card">
+
+                        <!-- STEP 1 -->
+                        <section class="ss-step ss-step-active" id="ssStep1" aria-labelledby="ssStep1Title">
+                            <div class="ss-step-header">
+                                <h2 id="ssStep1Title" class="ss-step-title">座席のレイアウト</h2>
+                                <p class="ss-step-desc">教室の机の並びを決めます。クリックで使わない席を指定できます。</p>
+                            </div>
+                            <div class="ss-layout-body">
+                                <div class="ss-layout-controls">
+                                    <div class="ss-num-grid">
+                                        <label class="ss-num-field">
+                                            <span class="ss-num-label">列数</span>
+                                            <input type="number" id="ssColCount" min="1" max="12" value="6">
+                                        </label>
+                                        <label class="ss-num-field">
+                                            <span class="ss-num-label">行数</span>
+                                            <input type="number" id="ssRowCount" min="1" max="10" value="5">
+                                        </label>
+                                    </div>
+                                    <button type="button" class="ss-btn-apply" id="ssApplyLayoutBtn">
+                                        <i class="fas fa-check" aria-hidden="true"></i>
+                                        <span>適用</span>
+                                    </button>
+                                    <div class="ss-board-toggle" role="radiogroup" aria-label="教室前面">
+                                    <button type="button" class="ss-board-toggle-btn ss-board-toggle-active" data-board="blackboard" role="radio" aria-checked="true"><i class="fas fa-chalkboard" aria-hidden="true"></i>黒板</button>
+                                    <button type="button" class="ss-board-toggle-btn" data-board="whiteboard" role="radio" aria-checked="false"><i class="fas fa-display" aria-hidden="true"></i>ホワイトボード</button>
+                                    </div>
+                                    <div class="ss-summary-card">
+                                        <div class="ss-summary-label">有効席数</div>
+                                        <div class="ss-summary-value">
+                                            <span id="ssActiveCount">30</span><span class="ss-summary-unit">席</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="ss-layout-grid-area">
+                                    <div class="ss-blackboard ss-blackboard-top" id="ssLayoutBoard">黒板</div>
+                                    <div class="ss-seat-grid ss-seat-grid-edit" id="ssSeatGridEdit"></div>
+                                    <p class="ss-grid-hint">マスをクリックして空席を指定</p>
+                                </div>
+                            </div>
+                            <div class="ss-footer-nav ss-footer-nav-end no-print">
+                                <button type="button" class="ss-btn ss-btn-primary" data-go-step="2"><span>次へ</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                            </div>
+                        </section>
+
+                        <!-- STEP 2 -->
+                        <section class="ss-step" id="ssStep2" aria-labelledby="ssStep2Title" hidden>
+                            <div class="ss-step-header">
+                                <h2 id="ssStep2Title" class="ss-step-title">名簿入力</h2>
+                                <p class="ss-step-desc">一行に一名。タブ区切りでふりがなも一緒に入れられます。</p>
+                            </div>
+                            <div class="ss-names-body">
+                                <textarea id="ssNamesText" class="ss-names-textarea" rows="14" aria-label="名簿"></textarea>
+                                <div class="ss-names-side">
+                                    <div class="ss-count-card" id="ssCountCard">
+                                        <div class="ss-count-row">
+                                            <span class="ss-count-num" id="ssNamesCount">0</span>
+                                            <span class="ss-count-unit">名</span>
+                                        </div>
+                                        <div class="ss-count-sub">有効席 <span id="ssActiveCountSub">0</span> 席</div>
+                                        <div class="ss-status-chip" id="ssStatusChip">
+                                            <span class="ss-status-dot"></span>
+                                            <span class="ss-status-text">過不足なし</span>
+                                        </div>
+                                    </div>
+                                    <div class="ss-hint-card">
+                                        <div class="ss-hint-title"><i class="fas fa-lightbulb" aria-hidden="true"></i> ヒント</div>
+                                        <p class="ss-hint-body">Excelから2列を選択してそのまま貼り付け可能</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="ss-footer-nav no-print">
+                                <button type="button" class="ss-btn ss-btn-ghost" data-go-step="1"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>戻る</span></button>
+                                <button type="button" class="ss-btn ss-btn-primary" data-go-step="3"><span>次へ</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                            </div>
+                        </section>
+
+                        <!-- STEP 3 -->
+                        <section class="ss-step" id="ssStep3" aria-labelledby="ssStep3Title" hidden>
+                            <div class="ss-step-header">
+                                <h2 id="ssStep3Title" class="ss-step-title">条件設定</h2>
+                                <p class="ss-step-desc">任意。離席条件を指定できます。空でもOK。</p>
+                            </div>
+                            <div class="ss-rules-body">
+                                <div class="ss-rules-head">
+                                    <div class="ss-rules-title">離席・隣接条件</div>
+                                    <button type="button" class="ss-btn-add" id="ssAddPairBtn"><i class="fas fa-plus" aria-hidden="true"></i><span>条件を追加</span></button>
+                                </div>
+                                <div class="ss-pair-list" id="ssPairList"></div>
+                                <div class="ss-pair-empty" id="ssPairEmpty">条件なし — そのまま実行できます</div>
+                            </div>
+                            <div class="ss-footer-nav no-print">
+                                <button type="button" class="ss-btn ss-btn-ghost" data-go-step="2"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>戻る</span></button>
+                                <button type="button" class="ss-btn ss-btn-cta" id="ssRunBtn">
+                                    <i class="fas fa-shuffle ss-cta-icon" aria-hidden="true"></i><span>席替えを実行</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <!-- STEP 4 -->
+                        <section class="ss-step" id="ssStep4" aria-labelledby="ssStep4Title" hidden>
+                            <div class="ss-step-header">
+                                <h2 id="ssStep4Title" class="ss-step-title">席替の結果</h2>
+                                <p class="ss-step-desc" id="ssResultDesc">気に入らなければ何度でも再生成できます。</p>
+                            </div>
+                            <div class="ss-warning" id="ssWarning" hidden>
+                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                <span>条件を満たせませんでした。条件を見直すか、もう一度お試しください。</span>
+                            </div>
+                            <div class="ss-toolbar no-print">
+                                <div class="ss-view-toggle" role="tablist" aria-label="視点切替">
+                                    <button type="button" class="ss-view-btn ss-view-active" role="tab" aria-selected="true" data-view="student"><i class="fas fa-user" aria-hidden="true"></i>生徒目線</button>
+                                    <button type="button" class="ss-view-btn" role="tab" aria-selected="false" data-view="teacher"><i class="fas fa-person-chalkboard" aria-hidden="true"></i>教師目線</button>
+                                </div>
+                                <div class="ss-toolbar-actions">
+                                    <button type="button" class="ss-btn ss-btn-ghost" id="ssAgainBtn"><i class="fas fa-rotate-right" aria-hidden="true"></i><span>もう一度</span></button>
+                                    <button type="button" class="ss-btn ss-btn-primary" id="ssPrintBtn"><i class="fas fa-print" aria-hidden="true"></i><span>印刷</span></button>
+                                </div>
+                            </div>
+                            <div class="ss-result-area" aria-live="polite">
+                                <div class="ss-result-frame">
+                                    <div class="ss-blackboard ss-result-blackboard ss-blackboard-top" id="ssResultBoardTop">黒板</div>
+                                    <div class="ss-seat-grid ss-seat-grid-result" id="ssSeatGridResult"></div>
+                                    <div class="ss-blackboard ss-result-blackboard ss-blackboard-bottom" id="ssResultBoardBottom" hidden>黒板</div>
+                                </div>
+                            </div>
+                            <div class="ss-footer-nav no-print">
+                                <button type="button" class="ss-btn ss-btn-ghost" data-go-step="3"><i class="fas fa-arrow-left" aria-hidden="true"></i><span>条件を見直す</span></button>
+                            </div>
+                        </section>
+
+                    </div>
+                </div>
+
+                <!-- 使い方（必須・常に末尾） -->
+                <div class="instructions">
+                    <h3><i class="fas fa-info-circle"></i> 使い方</h3>
+                    <ol>
+                        <li><strong>レイアウト</strong>：列数・行数を入れて「適用」を押し、空席にしたいマスをクリックします。</li>
+                        <li><strong>名簿</strong>：1行に1名で入力（Excelから貼り付け可）。タブ区切りでふりがなも入れられます。</li>
+                        <li><strong>条件</strong>：必要に応じて「離す／くっつける」「左右となり／まわり全部」を指定します（任意）。</li>
+                        <li><strong>席替を実行</strong>：シャッフルアニメ後に座席表が表示されます。「もう一度」で再生成できます。</li>
+                        <li><strong>印刷</strong>：生徒目線・教師目線を切り替えて「印刷」で配布用に出力できます。</li>
+                    </ol>
+                    <p class="note"><i class="fas fa-lightbulb"></i>
+                        <strong>左右となり</strong>は左右2席、<strong>まわり全部</strong>は前後左右＋斜めの8方向。
+                        <strong>教師目線</strong>は黒板側から見た並びで、生徒目線を上下左右に反転して表示します。
+                    </p>
+                </div>
+
+            </main>
+
+            <div class="ad-horizontal no-print">
+                <div class="ad-label">広告</div>
+                <div class="ad-horizontal-content">
+                    <i class="fas fa-rectangle-ad"></i>
+                    <p>728×90 レクタングル（大）バナー広告</p>
+                </div>
+            </div>
+
+            <footer></footer>
+        </div>
+
+        <aside class="ad-right"></aside>
+    </div>
+
+    <script src="common/js/class-mode.js"></script>
+    <script src="common/js/common-modal.js"></script>
+    
+    
+    
+    
+    
+    <script type="module" src="dist/seat-shuffle.js"></script>
+    <script src="common/js/landscape-guard.js"></script>
+</body>
+</html>

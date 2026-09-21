@@ -1,0 +1,1484 @@
+/* ============================================================
+   席替えジェネレーター（seat-shuffle）
+   - tools 共通テーマ（シアン #006064 × ベージュ #FDF5E6 × Noto Sans JP）
+   - 業務系ツール群（name-card-board / score-analyzer 等）とのトーン統一
+   - 変数名は --ss-* のまま温存（参照箇所190+の改修を回避）
+   - アクセントのテラコッタ系は CTA の個性として残置
+   ============================================================ */
+
+/* ─── スコープ局所トークン ───
+   2026-05-21 デザインシステム刷新で公式 token 経由に切替（Strategy A）。
+   168 箇所の `--ss-*` 参照は触らずに、`:root` での値だけを Foundation 経由にする。
+   これにより公式 brand 更新時に seat-shuffle も自動追随する。
+   `--ss-warm` テラコッタ CTA は本ツール固有のアクセントとして残置。
+*/
+.seat-shuffle-app {
+    /* Colors（公式 token 経由 + 一部派生色は残置） */
+    --ss-bg: var(--background-color);
+    --ss-bg-deep: #F0E8D4;        /* 背景ベージュより深い派生色：Foundation に無いため固有 */
+    --ss-card: var(--white);
+    --ss-ink: var(--text-color);
+    --ss-ink-soft: var(--gray-darker);
+    --ss-teal: var(--primary-color);
+    --ss-teal-dark: #004D40;      /* primary 濃色派生：Foundation に無いため固有 */
+    --ss-teal-light: #B2DFDB;     /* primary 薄色派生：Foundation に無いため固有 */
+    --ss-line: var(--gray);
+    --ss-warm: #d4815b;           /* テラコッタ CTA：seat-shuffle 固有アクセント */
+    --ss-warm-bg: #fbeee5;        /* テラコッタ薄背景：固有 */
+
+    /* Fonts（明朝体廃止・サンセリフ統一） */
+    --ss-serif: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+    --ss-sans: "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+
+    /* Spacing / radius */
+    --ss-radius-card: 6px;
+    --ss-radius-chip: 4px;
+    --ss-radius-pill: 999px;
+
+    /* Shadows（ニュートラルな黒寄りに調整） */
+    --ss-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06);
+    --ss-shadow-cell: 0 1px 2px rgba(0,0,0,0.04);
+    --ss-shadow-cta: 0 4px 14px rgba(212, 129, 91, 0.33);
+
+    /* Motion */
+    --ss-trans-fast: all .15s;
+    --ss-trans-progress: width .4s cubic-bezier(.4,.8,.2,1);
+    --ss-trans-node: all .25s;
+
+    position: relative;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 36px 0 8px;
+    color: var(--ss-ink);
+    font-family: var(--ss-sans);
+    background: var(--ss-bg);
+    border-radius: var(--ss-radius-card);
+    overflow: hidden;
+}
+
+/* 和紙風 罫線（背景） */
+.seat-shuffle-app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image: repeating-linear-gradient(
+        180deg,
+        transparent,
+        transparent 39px,
+        var(--ss-line) 39px,
+        var(--ss-line) 40px
+    );
+    z-index: 0;
+}
+
+.seat-shuffle-app > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* ─── 進捗バー ─── */
+.ss-progress {
+    position: relative;
+    margin: 0 24px 28px;
+    padding: 0 28px;
+}
+
+.ss-progress-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+    z-index: 2;
+}
+
+.ss-progress-list li {
+    flex: 0 0 auto;
+}
+
+.ss-progress-track {
+    position: absolute;
+    top: 22px;
+    left: calc(28px + 22px);
+    right: calc(28px + 22px);
+    height: 2px;
+    background: var(--ss-line);
+    z-index: 1;
+}
+
+.ss-progress-fill {
+    width: 0%;
+    height: 100%;
+    background: var(--ss-teal);
+    transition: var(--ss-trans-progress);
+}
+
+.ss-progress-node {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-family: inherit;
+    color: inherit;
+}
+
+.ss-progress-node:focus-visible {
+    outline: 2px solid var(--ss-teal);
+    outline-offset: 4px;
+    border-radius: 6px;
+}
+
+.ss-progress-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--ss-bg);
+    border: 2px solid var(--ss-line);
+    color: var(--ss-ink-soft);
+    font-family: var(--ss-serif);
+    font-size: 18px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--ss-trans-node);
+}
+
+.ss-progress-label {
+    font-family: var(--ss-sans);
+    font-size: 12px;
+    color: var(--ss-ink-soft);
+    letter-spacing: 0.05em;
+}
+
+.ss-progress-node[data-state="done"] .ss-progress-circle {
+    background: var(--ss-teal);
+    color: #fff;
+    border-color: var(--ss-teal);
+}
+
+.ss-progress-node[aria-current="step"] .ss-progress-circle {
+    background: var(--ss-teal-dark);
+    color: #fff;
+    border-color: var(--ss-teal);
+    box-shadow: 0 0 0 6px var(--ss-teal-light);
+}
+
+.ss-progress-node[aria-current="step"] .ss-progress-label {
+    color: var(--ss-teal-dark);
+    font-weight: 600;
+}
+
+/* ─── メインカード ─── */
+.ss-card {
+    background: var(--ss-card);
+    border-radius: var(--ss-radius-card);
+    border: 1px solid var(--ss-line);
+    box-shadow: var(--ss-shadow-card);
+    margin: 0 24px 16px;
+    padding: 32px 40px;
+    min-height: 540px;
+    position: relative;
+}
+
+/* ─── ステップ共通 ─── */
+/* HTML5 hidden 属性は display を持つ要素では効かない場合があるため明示する */
+[hidden] { display: none !important; }
+
+.ss-step-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ss-step-title {
+    font-family: var(--ss-serif);
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--ss-teal-dark);
+    margin: 0;
+    line-height: 1.3;
+    text-shadow: none;
+}
+
+.ss-step-desc {
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    color: var(--ss-ink-soft);
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ─── 共通ボタン ─── */
+.ss-btn {
+    padding: 12px 22px;
+    font-family: var(--ss-serif);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    border-radius: var(--ss-radius-card);
+    cursor: pointer;
+    transition: var(--ss-trans-fast);
+    line-height: 1;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ss-btn:focus-visible {
+    outline: 2px solid var(--ss-teal-dark);
+    outline-offset: 2px;
+}
+
+.ss-btn-primary {
+    background: var(--ss-teal-dark);
+    color: #fff;
+    border: 1.5px solid var(--ss-teal-dark);
+}
+.ss-btn-primary:hover { background: var(--ss-teal); border-color: var(--ss-teal); }
+
+.ss-btn-ghost {
+    background: transparent;
+    color: var(--ss-ink-soft);
+    border: 1.5px solid var(--ss-line);
+}
+.ss-btn-ghost:hover { background: var(--ss-bg); color: var(--ss-ink); }
+
+.ss-btn-cta {
+    background: var(--ss-warm);
+    color: #fff;
+    border: none;
+    border-radius: var(--ss-radius-pill);
+    padding: 14px 36px;
+    font-family: var(--ss-serif);
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    box-shadow: var(--ss-shadow-cta);
+    min-height: 48px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.ss-btn-cta:hover { filter: brightness(1.05); }
+
+.ss-btn-cta .ss-cta-icon {
+    display: inline-block;
+    transition: transform .35s ease;
+}
+.ss-btn-cta:hover .ss-cta-icon { transform: rotate(120deg); }
+
+.ss-btn[disabled],
+.ss-btn-cta[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ss-btn-apply {
+    width: 100%;
+    padding: 12px 10px;
+    background: var(--ss-teal-light);
+    color: var(--ss-teal-dark);
+    border: 1px solid var(--ss-teal);
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: var(--ss-radius-card);
+    min-height: 44px;
+    transition: var(--ss-trans-fast);
+}
+.ss-btn-apply:hover { background: #d3eae8; }
+
+.ss-btn-add {
+    padding: 8px 14px;
+    background: var(--ss-teal-light);
+    color: var(--ss-teal-dark);
+    border: 1px solid var(--ss-teal);
+    font-family: var(--ss-sans);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: var(--ss-radius-chip);
+    min-height: 36px;
+    line-height: 1;
+    transition: var(--ss-trans-fast);
+}
+.ss-btn-add:hover { background: #d3eae8; }
+
+/* ─── フッターナビ ─── */
+.ss-footer-nav {
+    margin-top: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+.ss-footer-nav-end { justify-content: flex-end; }
+
+/* ─── STEP 1 ─── */
+.ss-layout-body {
+    display: flex;
+    gap: 36px;
+    align-items: flex-start;
+    margin-top: 28px;
+}
+
+.ss-layout-controls {
+    min-width: 200px;
+    flex: 0 0 200px;
+}
+
+.ss-num-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.ss-num-field {
+    display: block;
+}
+
+.ss-num-label {
+    display: block;
+    font-size: 11px;
+    color: var(--ss-ink-soft);
+    margin-bottom: 4px;
+    letter-spacing: 0.05em;
+}
+
+.ss-num-field input[type="number"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1.5px solid var(--ss-line);
+    background: #fff;
+    font-family: var(--ss-serif);
+    font-size: 18px;
+    color: var(--ss-teal-dark);
+    border-radius: var(--ss-radius-card);
+    outline: none;
+    min-height: 44px;
+    transition: var(--ss-trans-fast);
+}
+.ss-num-field input[type="number"]:focus {
+    border-color: var(--ss-teal);
+    box-shadow: 0 0 0 3px var(--ss-teal-light);
+}
+
+.ss-summary-card {
+    margin-top: 24px;
+    padding: 14px 16px;
+    background: var(--ss-bg);
+    border: 1px solid var(--ss-line);
+    border-radius: var(--ss-radius-card);
+}
+
+.ss-summary-label {
+    font-size: 11px;
+    color: var(--ss-ink-soft);
+    letter-spacing: 0.15em;
+}
+
+.ss-summary-value {
+    font-family: var(--ss-serif);
+    font-size: 30px;
+    color: var(--ss-teal-dark);
+    font-weight: 500;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+.ss-summary-unit {
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    color: var(--ss-ink-soft);
+    margin-left: 4px;
+    font-weight: 400;
+}
+
+.ss-layout-grid-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 黒板チップ（既定: 黒板） */
+.ss-blackboard {
+    background: linear-gradient(135deg, var(--ss-teal-dark), var(--ss-teal));
+    color: #fff;
+    padding: 8px 36px;
+    border: 1px solid transparent;
+    border-radius: var(--ss-radius-chip);
+    font-family: var(--ss-serif);
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* ホワイトボード バリアント */
+.ss-blackboard.ss-blackboard-whiteboard {
+    background: #fff;
+    color: var(--ss-ink);
+    border: 1px solid var(--ss-line);
+    letter-spacing: 0.15em;
+}
+
+.ss-blackboard-top { margin-bottom: 16px; }
+.ss-blackboard-bottom { margin-top: 16px; }
+
+.ss-result-blackboard {
+    padding: 6px 30px;
+    font-size: 12px;
+}
+
+/* ボードタイプ トグル（黒板 / ホワイトボード） */
+.ss-board-toggle {
+    display: flex;
+    background: var(--ss-bg);
+    border: 1px solid var(--ss-line);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+    margin-top: 12px;
+}
+
+.ss-board-toggle-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    color: var(--ss-ink-soft);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+}
+
+.ss-board-toggle-btn:hover { color: var(--ss-ink); }
+
+.ss-board-toggle-btn.ss-board-toggle-active {
+    background: var(--ss-teal-dark);
+    color: #fff;
+}
+
+.ss-board-toggle-btn:focus-visible {
+    outline: 2px solid var(--ss-teal);
+    outline-offset: 2px;
+}
+
+/* 編集グリッド（STEP 1） */
+.ss-seat-grid-edit {
+    display: inline-grid;
+    grid-template-columns: repeat(var(--ss-cols, 6), 76px);
+    gap: 8px;
+}
+
+.ss-cell-edit {
+    width: 76px;
+    height: 56px;
+    border: none;
+    border-radius: var(--ss-radius-card);
+    cursor: pointer;
+    font-size: 16px;
+    font-family: var(--ss-serif);
+    transition: var(--ss-trans-fast);
+    padding: 0;
+}
+
+.ss-cell-edit[aria-pressed="true"] {
+    background: var(--ss-teal-light);
+    color: var(--ss-teal-dark);
+    box-shadow: 0 1px 3px rgba(20,40,40,0.1), inset 0 0 0 1.5px var(--ss-teal);
+}
+
+.ss-cell-edit[aria-pressed="false"] {
+    background: var(--ss-bg-deep);
+    color: var(--ss-line);
+    box-shadow: none;
+}
+
+.ss-cell-edit:hover {
+    transform: translateY(-1px);
+}
+
+.ss-cell-edit:focus-visible {
+    outline: 2px solid var(--ss-teal);
+    outline-offset: 2px;
+}
+
+.ss-grid-hint {
+    font-size: 11px;
+    color: var(--ss-ink-soft);
+    margin: 14px 0 0;
+}
+
+/* ─── STEP 2 ─── */
+.ss-names-body {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    margin-top: 28px;
+}
+
+.ss-names-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 20px;
+    border: 1.5px solid var(--ss-line);
+    border-radius: var(--ss-radius-card);
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    line-height: 2;
+    color: var(--ss-ink);
+    outline: none;
+    resize: vertical;
+    background: var(--ss-bg);
+    min-height: 360px;
+}
+.ss-names-textarea:focus {
+    border-color: var(--ss-teal);
+    box-shadow: 0 0 0 3px var(--ss-teal-light);
+}
+
+.ss-names-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ss-count-card {
+    background: var(--ss-teal-light);
+    padding: 22px;
+    border-radius: var(--ss-radius-card);
+    border: 1px solid var(--ss-teal);
+}
+
+.ss-count-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.ss-count-num {
+    font-family: var(--ss-serif);
+    font-size: 40px;
+    color: var(--ss-teal-dark);
+    font-weight: 500;
+    line-height: 1;
+}
+
+.ss-count-unit {
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    color: var(--ss-ink-soft);
+}
+
+.ss-count-sub {
+    font-family: var(--ss-sans);
+    font-size: 12px;
+    color: var(--ss-ink-soft);
+    margin-top: 8px;
+}
+
+.ss-status-chip {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: var(--ss-radius-chip);
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ss-teal);
+}
+
+.ss-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ss-teal);
+    flex: 0 0 auto;
+}
+
+.ss-status-chip[data-state="warn"] {
+    color: var(--ss-warm);
+}
+.ss-status-chip[data-state="warn"] .ss-status-dot {
+    background: var(--ss-warm);
+}
+
+.ss-hint-card {
+    padding: 14px 18px;
+    background: var(--ss-bg);
+    border: 1px solid var(--ss-line);
+    border-radius: var(--ss-radius-card);
+    font-size: 12px;
+    color: var(--ss-ink-soft);
+    line-height: 1.7;
+}
+
+.ss-hint-title {
+    font-family: var(--ss-serif);
+    font-size: 13px;
+    color: var(--ss-ink);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.ss-hint-body {
+    margin: 0;
+}
+
+/* ─── STEP 3 ─── */
+.ss-rules-body { margin-top: 28px; }
+
+.ss-rules-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ss-rules-title {
+    font-family: var(--ss-serif);
+    font-size: 15px;
+    color: var(--ss-ink);
+    font-weight: 500;
+}
+
+.ss-pair-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ss-pair-empty {
+    padding: 36px;
+    background: var(--ss-bg);
+    border: 1px dashed var(--ss-line);
+    border-radius: var(--ss-radius-card);
+    text-align: center;
+    font-family: var(--ss-serif);
+    color: var(--ss-ink-soft);
+    font-size: 14px;
+    font-style: italic;
+}
+
+.ss-pair-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ss-line);
+    background: var(--ss-bg);
+    border-radius: var(--ss-radius-card);
+    flex-wrap: wrap;
+}
+
+.ss-pair-row select {
+    padding: 8px 10px;
+    border: 1px solid var(--ss-line);
+    background: #fff;
+    font-family: var(--ss-sans);
+    font-size: 13px;
+    color: var(--ss-ink);
+    outline: none;
+    border-radius: var(--ss-radius-chip);
+    min-height: 36px;
+    transition: var(--ss-trans-fast);
+}
+.ss-pair-row select:focus {
+    border-color: var(--ss-teal);
+    box-shadow: 0 0 0 3px var(--ss-teal-light);
+}
+
+.ss-pair-glue {
+    font-size: 12px;
+    color: var(--ss-ink-soft);
+}
+
+.ss-pair-remove {
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--ss-warm);
+    cursor: pointer;
+    font-size: 18px;
+    border-radius: 50%;
+    transition: var(--ss-trans-fast);
+}
+.ss-pair-remove:hover {
+    background: var(--ss-warm-bg);
+}
+.ss-pair-remove:focus-visible {
+    outline: 2px solid var(--ss-warm);
+    outline-offset: 2px;
+}
+
+/* ─── STEP 4 ─── */
+.ss-warning {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: var(--ss-warm-bg);
+    color: var(--ss-warm);
+    border: 1px solid rgba(212,129,91,0.4);
+    border-radius: var(--ss-radius-card);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ss-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 24px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.ss-view-toggle {
+    display: inline-flex;
+    background: var(--ss-bg);
+    border-radius: var(--ss-radius-pill);
+    padding: 4px;
+    border: 1px solid var(--ss-line);
+}
+
+.ss-view-btn {
+    padding: 8px 18px;
+    border: none;
+    cursor: pointer;
+    border-radius: var(--ss-radius-pill);
+    background: transparent;
+    color: var(--ss-ink-soft);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition: var(--ss-trans-fast);
+    min-height: 36px;
+}
+
+.ss-view-btn[aria-selected="true"] {
+    background: var(--ss-teal-dark);
+    color: #fff;
+}
+
+.ss-view-btn:focus-visible {
+    outline: 2px solid var(--ss-teal);
+    outline-offset: 2px;
+}
+
+.ss-toolbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ss-result-area {
+    width: 100%;
+}
+
+.ss-result-frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px;
+    background: var(--ss-bg);
+    border: 1px solid var(--ss-line);
+    border-radius: var(--ss-radius-card);
+}
+
+.ss-seat-grid-result {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(var(--ss-cols, 6), 1fr);
+    gap: 6px;
+}
+
+.ss-cell-result {
+    aspect-ratio: 5 / 4;
+    min-height: 56px;
+    background: #fff;
+    border: 1.5px solid var(--ss-teal);
+    border-radius: var(--ss-radius-card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    box-shadow: var(--ss-shadow-cell);
+    text-align: center;
+    transition: transform .35s cubic-bezier(.3,1.4,.5,1), opacity .25s, box-shadow .25s;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.ss-cell-result-empty {
+    background: var(--ss-bg-deep);
+    border-color: var(--ss-line);
+}
+
+.ss-cell-result-shuffling {
+    transition: transform .12s ease-out, opacity .12s, box-shadow .12s;
+}
+
+.ss-cell-furigana {
+    font-size: 9px;
+    color: var(--ss-ink-soft);
+    margin-bottom: 1px;
+    line-height: 1.2;
+}
+
+.ss-cell-name {
+    font-family: var(--ss-serif);
+    font-size: 14px;
+    color: var(--ss-ink);
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+/* ============================================================
+   2026 UI refresh: 操作卓型レイアウト
+   - 画像生成案に合わせ、座席表を主役にしたアプリUIへ寄せる
+   - 既存 JS の ID / class 契約は維持
+   ============================================================ */
+
+body {
+    background:
+        linear-gradient(180deg, rgba(0, 96, 100, 0.04), rgba(253, 245, 230, 0) 220px),
+        var(--background-color);
+}
+
+.container {
+    max-width: 1220px;
+}
+
+.seat-shuffle-app {
+    max-width: 1180px;
+    padding: 14px 0 10px;
+    background: linear-gradient(180deg, #fffaf0 0%, #f8efe0 100%);
+    border: 1px solid rgba(0, 96, 100, 0.12);
+    box-shadow: 0 18px 46px rgba(35, 46, 42, 0.08);
+}
+
+.seat-shuffle-app::before {
+    opacity: 0.22;
+    background-image:
+        linear-gradient(90deg, rgba(0,96,100,0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(0,96,100,0.035) 1px, transparent 1px);
+    background-size: 36px 36px;
+}
+
+.ss-progress {
+    margin: 0 18px 14px;
+    padding: 10px 16px 8px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(0, 96, 100, 0.12);
+    border-radius: 8px;
+    backdrop-filter: blur(6px);
+}
+
+.ss-progress-circle {
+    width: 34px;
+    height: 34px;
+    background: #fff;
+    font-family: var(--ss-sans);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.ss-progress-track {
+    top: 27px;
+    left: calc(16px + 17px);
+    right: calc(16px + 17px);
+}
+
+.ss-progress-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.ss-progress-node[aria-current="step"] .ss-progress-circle {
+    box-shadow: 0 0 0 4px rgba(178, 223, 219, 0.82);
+}
+
+.ss-card {
+    margin: 0 18px 8px;
+    padding: 14px 18px;
+    min-height: 0;
+    background: rgba(255,255,255,0.94);
+    border-color: rgba(0, 96, 100, 0.14);
+    box-shadow: 0 12px 32px rgba(33, 38, 35, 0.08);
+}
+
+.ss-step-header {
+    padding: 4px 4px 14px;
+    border-bottom: 1px solid rgba(0, 96, 100, 0.1);
+}
+
+.ss-step-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #123d3f;
+}
+
+.ss-step-desc {
+    font-size: 13px;
+    color: #5d6b68;
+}
+
+.ss-layout-body {
+    display: grid;
+    grid-template-columns: minmax(214px, 0.8fr) minmax(540px, 2.3fr);
+    gap: 14px;
+    align-items: stretch;
+    margin-top: 16px;
+}
+
+.ss-layout-controls,
+.ss-names-side,
+.ss-rules-body,
+.ss-result-frame {
+    background: #fff;
+    border: 1px solid rgba(0, 96, 100, 0.13);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(34, 42, 39, 0.05);
+}
+
+.ss-layout-controls {
+    min-width: 0;
+    flex: initial;
+    padding: 16px;
+    align-self: stretch;
+}
+
+.ss-num-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.ss-num-label,
+.ss-summary-label {
+    color: #334845;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.ss-num-field input[type="number"] {
+    border-color: rgba(0, 96, 100, 0.18);
+    background: #fbf8f0;
+    color: #103f42;
+    font-size: 22px;
+    font-weight: 800;
+    text-align: center;
+    box-shadow: inset 0 -2px 0 rgba(0, 96, 100, 0.06);
+}
+
+.ss-btn,
+.ss-btn-apply,
+.ss-btn-add,
+.ss-view-btn,
+.ss-board-toggle-btn {
+    font-family: var(--ss-sans);
+    letter-spacing: 0;
+    font-weight: 700;
+}
+
+.ss-btn {
+    border-radius: 8px;
+}
+
+.ss-btn-primary {
+    background: var(--ss-teal);
+    border-color: var(--ss-teal);
+}
+
+.ss-btn-primary:hover {
+    background: var(--ss-teal-dark);
+    border-color: var(--ss-teal-dark);
+}
+
+.ss-btn-ghost {
+    background: #fff;
+    color: #263f3e;
+    border-color: rgba(0, 96, 100, 0.22);
+}
+
+.ss-btn-apply,
+.ss-btn-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #e7f2ef;
+    border-color: rgba(0, 96, 100, 0.28);
+}
+
+.ss-btn-cta {
+    width: 100%;
+    min-height: 74px;
+    border-radius: 8px;
+    justify-content: center;
+    background: linear-gradient(135deg, #d66f51, #cf553f);
+    box-shadow: 0 14px 26px rgba(207, 85, 63, 0.24);
+    font-size: 20px;
+    letter-spacing: 0.06em;
+}
+
+.ss-btn-cta:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+}
+
+.ss-board-toggle {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 4px;
+    border-radius: 8px;
+    background: #fbf8f0;
+}
+
+.ss-board-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 40px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.ss-summary-card {
+    margin-top: 18px;
+    padding: 16px;
+    background: #f8fbf9;
+    border-color: rgba(0, 96, 100, 0.16);
+}
+
+.ss-summary-value {
+    color: var(--ss-teal);
+    font-size: 42px;
+    font-weight: 800;
+}
+
+.ss-layout-grid-area {
+    padding: 16px 24px 12px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,250,240,0.96)),
+        #fff;
+    border: 1px solid rgba(0, 96, 100, 0.13);
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.72), 0 6px 18px rgba(34, 42, 39, 0.04);
+}
+
+.ss-blackboard {
+    min-width: min(620px, 86%);
+    padding: 10px 36px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #31483f, #50685c);
+    box-shadow: inset 0 -8px 20px rgba(0,0,0,0.16);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-align: center;
+}
+
+.ss-blackboard.ss-blackboard-whiteboard {
+    background: linear-gradient(180deg, #fff, #f5f7f5);
+    box-shadow: inset 0 -4px 14px rgba(0,0,0,0.04);
+}
+
+.ss-seat-grid-edit {
+    grid-template-columns: repeat(var(--ss-cols, 6), minmax(72px, 1fr));
+    width: min(100%, 760px);
+    gap: 10px 14px;
+}
+
+.ss-cell-edit {
+    width: 100%;
+    height: 58px;
+    border-radius: 8px;
+    font-weight: 800;
+}
+
+.ss-cell-edit[aria-pressed="true"] {
+    background: linear-gradient(180deg, #fffaf1, #f2e7d3);
+    color: #20342f;
+    box-shadow: 0 3px 0 rgba(117, 88, 48, 0.22), inset 0 0 0 1px #c5ad87;
+}
+
+.ss-cell-edit[aria-pressed="false"] {
+    background: rgba(255,255,255,0.45);
+    color: transparent;
+    border: 2px dashed rgba(102, 102, 102, 0.45);
+    box-shadow: none;
+}
+
+.ss-grid-hint {
+    padding: 10px 12px;
+    color: #5f6a68;
+    background: rgba(0, 96, 100, 0.04);
+    border-radius: 6px;
+}
+
+.ss-names-body {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 14px;
+}
+
+.ss-names-textarea {
+    min-height: 420px;
+    background: #fffdf8;
+    border-color: rgba(0, 96, 100, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.8);
+}
+
+.ss-names-side {
+    padding: 14px;
+}
+
+.ss-count-card {
+    background: #e8f4f1;
+    border-color: rgba(0, 96, 100, 0.2);
+}
+
+.ss-count-num {
+    color: var(--ss-teal);
+    font-size: 48px;
+    font-weight: 800;
+}
+
+.ss-status-chip {
+    border: 1px solid rgba(0, 96, 100, 0.16);
+    border-radius: 8px;
+}
+
+.ss-status-chip[data-state="warn"] {
+    color: #cf553f;
+    border-color: rgba(207,85,63,0.22);
+    background: #fff6f2;
+}
+
+.ss-hint-card {
+    background: #fffaf0;
+    border-color: rgba(0, 96, 100, 0.12);
+    border-radius: 8px;
+}
+
+.ss-hint-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #193f40;
+    font-weight: 800;
+}
+
+.ss-rules-body {
+    padding: 18px;
+}
+
+.ss-rules-title {
+    color: #193f40;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.ss-pair-empty {
+    background: #fffaf0;
+    border-color: rgba(0, 96, 100, 0.18);
+    border-radius: 8px;
+}
+
+.ss-pair-row {
+    background: #fffdf8;
+    border-color: rgba(0, 96, 100, 0.13);
+    border-radius: 8px;
+    box-shadow: 0 5px 16px rgba(34, 42, 39, 0.04);
+}
+
+.ss-pair-row select {
+    min-height: 42px;
+    border-color: rgba(0, 96, 100, 0.18);
+    border-radius: 6px;
+}
+
+.ss-pair-remove {
+    border-radius: 8px;
+}
+
+.ss-warning {
+    border-radius: 8px;
+}
+
+.ss-toolbar {
+    margin: 16px 0 12px;
+    padding: 12px;
+    background: #fff;
+    border: 1px solid rgba(0, 96, 100, 0.12);
+    border-radius: 8px;
+}
+
+.ss-view-toggle {
+    border-radius: 8px;
+    background: #fbf8f0;
+}
+
+.ss-view-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 6px;
+    min-height: 42px;
+}
+
+.ss-view-btn[aria-selected="true"] {
+    background: var(--ss-teal);
+}
+
+.ss-result-frame {
+    padding: 14px 18px;
+    overflow: hidden;
+}
+
+.ss-seat-grid-result {
+    width: 100%;
+    max-width: min(860px, 100%);
+    margin: 0 auto;
+    gap: clamp(4px, 0.65vw, 8px);
+    grid-auto-rows: minmax(0, 1fr);
+}
+
+.ss-cell-result {
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: 2.15 / 1;
+    border: 1px solid #c5ad87;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #fffaf1, #f2e7d3);
+    box-shadow: 0 3px 0 rgba(117, 88, 48, 0.22), inset 0 0 0 1px rgba(255,255,255,0.65);
+    overflow: hidden;
+}
+
+.ss-cell-result-empty {
+    background: rgba(255,255,255,0.45);
+    border: 2px dashed rgba(102,102,102,0.42);
+    box-shadow: none;
+}
+
+.ss-cell-furigana {
+    color: #6d7774;
+    font-size: clamp(7px, 0.65vw, 9px);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ss-cell-name {
+    color: #243530;
+    font-size: clamp(9px, 0.9vw, 14px);
+    font-weight: 800;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.ss-footer-nav {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0, 96, 100, 0.1);
+}
+
+/* ─── レスポンシブ（900px / 768px ブレーク） ─── */
+@media (max-width: 900px) {
+    .ss-layout-body,
+    .ss-names-body {
+        grid-template-columns: 1fr;
+    }
+
+    .ss-board-toggle,
+    .ss-num-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .ss-seat-grid-edit {
+        gap: 8px;
+    }
+
+    .ss-cell-edit {
+        height: clamp(44px, 8vw, 64px);
+    }
+}
+
+@media (max-width: 768px) {
+    .seat-shuffle-app {
+        padding: 24px 0 8px;
+    }
+    .ss-progress {
+        margin: 0 12px 24px;
+        padding: 0 8px;
+    }
+    .ss-progress-track {
+        left: calc(8px + 22px);
+        right: calc(8px + 22px);
+    }
+    .ss-progress-label { font-size: 11px; }
+
+    .ss-card {
+        margin: 0 12px 16px;
+        padding: 24px 20px;
+        min-height: 0;
+    }
+
+    .ss-step-title { font-size: 20px; }
+
+    /* STEP 1 縦積み */
+    .ss-layout-body {
+        flex-direction: column;
+        gap: 24px;
+    }
+    .ss-layout-controls {
+        flex: 0 0 auto;
+        min-width: 0;
+        width: 100%;
+    }
+    .ss-summary-card { margin-top: 16px; }
+
+    .ss-seat-grid-edit {
+        grid-template-columns: repeat(var(--ss-cols, 6), clamp(48px, 12vw, 76px));
+        gap: 6px;
+    }
+    .ss-cell-edit {
+        width: clamp(48px, 12vw, 76px);
+        height: clamp(40px, 9vw, 56px);
+    }
+
+    /* STEP 2 縦積み */
+    .ss-names-body {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .ss-names-textarea { min-height: 240px; }
+
+    /* STEP 4 ツールバー */
+    .ss-toolbar { flex-direction: column; align-items: stretch; }
+    .ss-toolbar-actions { justify-content: flex-end; }
+
+    .ss-cell-name { font-size: 12px; }
+}
+
+/* ─── 印刷用（A4横で結果のみ） ─── */
+@media print {
+    @page { size: A4 landscape; margin: 1cm; }
+
+    body { background: #fff !important; }
+
+    /* 画面用 UI を全て隠す（共通JS が動的に挿入する .no-print 要素も含む） */
+    .no-print,
+    .landscape-guard,
+    .class-mode-toggle,
+    .ad-left, .ad-right, .ad-horizontal,
+    header, footer,
+    .ss-progress,
+    .ss-step-header,
+    .ss-toolbar,
+    .ss-footer-nav,
+    .ss-warning,
+    .instructions {
+        display: none !important;
+    }
+
+    /* 結果以外のステップは隠す */
+    .ss-step:not(#ssStep4) { display: none !important; }
+
+    .seat-shuffle-app {
+        padding: 0;
+        background: #fff;
+        max-width: none;
+        margin: 0;
+        overflow: visible;
+    }
+    .seat-shuffle-app::before { display: none !important; }
+
+    .ss-card {
+        background: #fff;
+        border: none;
+        box-shadow: none;
+        margin: 0;
+        padding: 0;
+        min-height: 0;
+    }
+
+    .ss-result-frame {
+        background: #fff;
+        border: 1px solid #000;
+        padding: 8px;
+    }
+
+    .ss-seat-grid-result { gap: 4px; }
+
+    .ss-cell-result {
+        box-shadow: none;
+        border-color: #000;
+    }
+
+    .ss-cell-result-empty {
+        background: #f5f5f5;
+        border-color: #999;
+    }
+
+    .ss-blackboard {
+        color: #fff !important;
+    }
+
+    .ss-blackboard.ss-blackboard-whiteboard {
+        background: #fff !important;
+        color: #000 !important;
+        border: 1px solid #000 !important;
+    }
+}
+
+/* ─── 低い画面（STEP 1 の次へを初期画面内に表示） ─── */
+@media screen and (min-width: 901px) and (max-height: 800px) {
+    #ssStep1 {
+        position: relative;
+    }
+
+    #ssStep1 > .ss-step-header {
+        margin-right: 120px;
+    }
+
+    #ssStep1 > .ss-footer-nav {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+}
